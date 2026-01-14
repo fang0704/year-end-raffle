@@ -1,0 +1,709 @@
+
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>放射腫瘤部幸運定位系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 自定義字型與動畫 */
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'JetBrains Mono', 'Noto Sans TC', monospace;
+            background-color: #111827; /* gray-900 */
+            color: #4ade80; /* green-400 */
+        }
+
+        .grid-bg {
+            background-image: 
+                linear-gradient(0deg, transparent 24%, #00ff00 25%, #00ff00 26%, transparent 27%, transparent 74%, #00ff00 75%, #00ff00 76%, transparent 77%, transparent), 
+                linear-gradient(90deg, transparent 24%, #00ff00 25%, #00ff00 26%, transparent 27%, transparent 74%, #00ff00 75%, #00ff00 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            opacity: 0.1;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        @keyframes scan-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-scan-spin {
+            animation: scan-spin 2s linear infinite;
+        }
+
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-fast {
+            animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .stripe-pattern {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, #000 10px, #000 20px);
+            opacity: 0.2;
+        }
+
+        /* 中獎特效 */
+        .winner-effect {
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.9); /* 增強發光 */
+            transform: scale(1.1);
+            color: white !important;
+        }
+        
+        /* 隱藏元素 */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Toast 動畫 */
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+        .animate-toast {
+            animation: fadeInOut 3s ease-in-out forwards;
+        }
+        
+        /* 藏頭詩發光效果 */
+        .poem-text {
+            text-shadow: 0 0 5px rgba(74, 222, 128, 0.3);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden relative selection:bg-green-900 selection:text-white">
+
+    <!-- 背景網格 -->
+    <div class="absolute inset-0 pointer-events-none grid-bg"></div>
+
+    <!-- Header -->
+    <header class="p-4 border-b border-green-800 flex justify-between items-center bg-gray-900/90 z-10 shadow-[0_0_15px_rgba(0,255,0,0.2)]">
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <i data-lucide="radiation" id="header-icon" class="w-8 h-8 text-green-500 transition-colors duration-300"></i>
+                <div id="header-glow" class="absolute inset-0 bg-yellow-400 opacity-0 blur-lg rounded-full transition-opacity duration-300"></div>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-widest text-white">RAD-ONC LOTTERY</h1>
+                <p class="text-xs text-green-600">放射腫瘤部 幸運定位系統 V1.0</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="text-right hidden md:block mr-2">
+                <p class="text-xs text-gray-400">STATUS</p>
+                <p id="status-text" class="text-sm font-bold text-green-400">READY</p>
+            </div>
+            
+            <!-- 音效開關 -->
+            <button id="btn-sound" onclick="toggleSound()" class="p-2 hover:bg-green-900/50 rounded transition border border-green-800 text-green-400 hover:text-white" title="切換音效">
+                <i data-lucide="volume-2" id="icon-sound" class="w-5 h-5"></i>
+            </button>
+
+            <!-- 重置按鈕 -->
+            <button onclick="openResetModal()" class="flex items-center gap-2 px-3 py-2 bg-red-900/30 hover:bg-red-900/80 border border-red-800 text-red-400 hover:text-white rounded transition-all" title="重置系統">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                <span class="text-xs font-bold hidden sm:inline">重置</span>
+            </button>
+
+            <button onclick="openSettings()" class="p-2 hover:bg-green-900/50 rounded transition border border-green-800 text-green-400 hover:text-white" title="設定名單">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col md:flex-row p-4 gap-4 relative z-0 h-full overflow-hidden">
+        
+        <!-- Left: Control & Display Area -->
+        <div class="flex-1 flex flex-col gap-4 min-h-0">
+            
+            <!-- Main Display Screen -->
+            <div class="flex-1 border-2 border-green-700 bg-black relative rounded-lg overflow-hidden shadow-[0_0_30px_rgba(0,255,0,0.1)] flex flex-col items-center justify-center min-h-[300px]">
+                
+                <!-- Screen Corners -->
+                <div class="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-green-500"></div>
+                <div class="absolute top-2 right-2 w-4 h-4 border-r-2 border-t-2 border-green-500"></div>
+                <div class="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-green-500"></div>
+                <div class="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-green-500"></div>
+
+                <!-- Scanning Crosshair (Overlay) -->
+                <div id="scan-overlay" class="absolute inset-0 pointer-events-none transition-opacity duration-300 opacity-20">
+                     <div class="absolute top-1/2 left-0 w-full h-[1px] bg-green-500/50"></div>
+                     <div class="absolute left-1/2 top-0 h-full w-[1px] bg-green-500/50"></div>
+                     <div id="scan-circle" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-green-500/30 rounded-full w-64 h-64 transition-all duration-300"></div>
+                     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-green-500 rounded-full w-48 h-48"></div>
+                </div>
+
+                <!-- Target Info Overlay -->
+                <div class="absolute top-4 left-4 text-xs text-green-600 font-mono">
+                    <p>TARGET_ID: <span id="target-status">SEARCHING...</span></p>
+                    <p>DOSE_RATE: <span id="dose-rate">0</span> MU/min</p>
+                    <p>GANTRY: <span id="gantry-angle">0.0</span>°</p>
+                </div>
+
+                <!-- The Name Display (放大版) -->
+                <div class="relative z-10 text-center px-4 w-full">
+                    <div id="locked-msg" class="text-yellow-400 text-lg md:text-xl mb-4 font-bold tracking-widest hidden animate-bounce">
+                        ⚠ TARGET LOCKED ⚠
+                    </div>
+                    <!-- 名字放大：text-7xl (手機) 到 text-9xl (電腦) -->
+                    <h2 id="display-name" class="text-7xl md:text-9xl font-black tracking-wider transition-all duration-100 text-green-500 break-words leading-tight drop-shadow-2xl">
+                        系統就緒
+                    </h2>
+                    <div id="congrats-tag" class="mt-8 hidden">
+                       <!-- 恭喜中獎放大：增加 padding 和字體大小 -->
+                       <div class="inline-block px-8 py-3 bg-yellow-500 text-black font-extrabold text-3xl md:text-4xl rounded-lg transform -rotate-2 shadow-[0_0_20px_rgba(234,179,8,0.8)] border-4 border-yellow-300">
+                           🎉 恭喜中獎 🎉
+                       </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="h-auto md:h-32 bg-gray-800 border-t-4 border-green-600 rounded-lg p-4 flex flex-col md:flex-row items-center justify-between shadow-lg gap-4">
+                <div class="flex flex-col w-full md:w-auto text-center md:text-left">
+                    <span class="text-gray-400 text-xs uppercase tracking-wider">Remaining Targets</span>
+                    <span class="text-3xl font-bold text-white">
+                        <span id="count-remaining">0</span> 
+                        <span class="text-sm text-gray-500">/ <span id="count-total">0</span></span>
+                    </span>
+                </div>
+
+                <!-- 藏頭詩 (放置於按鈕旁的空白處) -->
+                <div class="flex flex-col items-center justify-center space-y-1 opacity-60 mx-4 select-none">
+                    <p class="text-xs text-green-500 font-bold tracking-[0.3em] poem-text">奇準鎖病灶</p>
+                    <p class="text-xs text-green-500 font-bold tracking-[0.3em] poem-text">美策護安康</p>
+                    <p class="text-xs text-green-500 font-bold tracking-[0.3em] poem-text">放束循軌正</p>
+                    <p class="text-xs text-green-500 font-bold tracking-[0.3em] poem-text">腫消守平長</p>
+                </div>
+
+                <div class="flex gap-4 w-full md:w-auto justify-center">
+                    <!-- Beam On Button -->
+                    <button id="btn-beam" onclick="startTreatment()" class="relative group overflow-hidden px-8 py-4 rounded-md font-bold text-xl tracking-wider transition-all bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.6)] hover:scale-105 active:scale-95 disabled:bg-gray-700 disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed w-full md:w-auto">
+                        <span class="relative z-10 flex items-center justify-center gap-2">
+                            <i data-lucide="radiation" id="btn-icon-beam" class=""></i>
+                            <span id="btn-text-beam">BEAM ON</span>
+                        </span>
+                        <div class="absolute inset-0 stripe-pattern pointer-events-none"></div>
+                    </button>
+
+                    <!-- Next Button (Hidden initially) -->
+                    <button id="btn-next" onclick="nextFraction()" class="hidden px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xl rounded-md shadow-[0_0_20px_rgba(8,145,178,0.6)] hover:scale-105 transition-all flex items-center justify-center gap-2 w-full md:w-auto">
+                        <i data-lucide="play" class="fill-current"></i>
+                        NEXT FRACTION
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Lists (Sidebar) -->
+        <div class="w-full md:w-80 flex flex-col gap-4 min-h-[300px]">
+            
+            <!-- Winners List -->
+            <div class="flex-1 bg-gray-800/80 border border-green-800 rounded-lg p-4 overflow-hidden flex flex-col">
+                <div class="flex items-center gap-2 mb-4 border-b border-green-700 pb-2">
+                    <i data-lucide="trophy" class="text-yellow-400 w-5 h-5"></i>
+                    <h3 class="font-bold text-white">已中獎名單 (Treated)</h3>
+                </div>
+                <div id="winners-list" class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <!-- Winners will be injected here -->
+                    <div class="text-center text-gray-500 py-8 text-sm italic">No treatment history.</div>
+                </div>
+            </div>
+
+            <!-- Candidates Preview -->
+            <div class="h-1/3 bg-gray-800/80 border border-gray-700 rounded-lg p-4 flex flex-col">
+                 <div class="flex items-center gap-2 mb-2">
+                    <i data-lucide="users" class="text-gray-400 w-4 h-4"></i>
+                    <h3 class="font-bold text-gray-400 text-sm">待抽名單 (Pending)</h3>
+                </div>
+                <div id="candidates-preview" class="flex-1 overflow-y-auto text-xs text-gray-500 font-mono custom-scrollbar break-all">
+                    <!-- Candidate names preview -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-800 border-2 border-green-600 w-full max-w-lg rounded-lg shadow-[0_0_50px_rgba(0,255,0,0.2)] p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="activity" class="text-green-500"></i>
+                    系統參數設定
+                </h2>
+                <button onclick="closeSettings()" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-green-400 text-sm mb-2 font-mono">輸入候選人名單 (一行一個名字):</label>
+                <textarea id="settings-input" class="w-full h-64 bg-black border border-green-700 text-white p-3 font-mono text-sm focus:outline-none focus:border-green-400 rounded" placeholder="請貼上名單..."></textarea>
+                <div class="text-right text-xs text-gray-500 mt-1">
+                    目前人數: <span id="settings-count">0</span>
+                </div>
+            </div>
+
+            <div class="flex justify-end items-center gap-4">
+                <button onclick="saveSettings()" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded shadow-[0_0_10px_rgba(0,255,0,0.4)] transition-all">
+                    確認並載入名單
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Confirmation Modal -->
+    <div id="reset-modal" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-800 border-2 border-red-600 w-full max-w-sm rounded-lg p-6 shadow-[0_0_50px_rgba(220,38,38,0.2)]">
+            <h3 class="text-xl font-bold text-red-500 mb-4 flex items-center gap-2">
+                <i data-lucide="alert-triangle"></i> 系統警告
+            </h3>
+            <p class="text-gray-300 mb-6 text-sm leading-relaxed">
+                確定要執行系統重置嗎？<br><br>
+                這將會：<br>
+                1. 清空「已中獎名單」<br>
+                2. 將所有人還原回「待抽名單」<br><br>
+                <span class="text-yellow-500 font-bold">⚠️ 此動作無法復原。</span>
+            </p>
+            <div class="flex gap-3">
+                <button onclick="closeResetModal()" class="flex-1 px-4 py-3 border border-gray-600 rounded text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
+                    取消
+                </button>
+                <button onclick="confirmFullReset()" class="flex-1 px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded shadow-lg transition-colors">
+                    確認重置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast-container" class="fixed top-20 right-4 z-[70] pointer-events-none"></div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- 音效控制器 (Web Audio API) ---
+        // 使用瀏覽器內建合成器，不需外部檔案
+        const AudioCtrl = {
+            ctx: null,
+            enabled: true,
+            
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            toggle() {
+                this.enabled = !this.enabled;
+                // 更新圖示
+                const icon = document.getElementById('icon-sound');
+                if (this.enabled) {
+                    icon.setAttribute('data-lucide', 'volume-2');
+                    this.playScan(); // 測試音
+                } else {
+                    icon.setAttribute('data-lucide', 'volume-x');
+                }
+                lucide.createIcons();
+                return this.enabled;
+            },
+
+            // 播放單音
+            playTone(freq, duration, type = 'sine', vol = 0.1) {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                
+                // 聲音包絡 (Envelope)
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+
+            // 掃描音效：模仿蓋革計數器或高科技運算
+            playScan() {
+                // 隨機頻率產生「數據運算感」
+                const freq = 800 + Math.random() * 400;
+                this.playTone(freq, 0.05, 'square', 0.05);
+            },
+
+            // 中獎音效：成功鎖定 (大調琶音)
+            playWin() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                // C Major Arpeggio (C5, E5, G5, C6)
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                
+                notes.forEach((freq, i) => {
+                     const osc = this.ctx.createOscillator();
+                     const gain = this.ctx.createGain();
+                     osc.type = 'triangle';
+                     osc.frequency.setValueAtTime(freq, now + i * 0.1);
+                     
+                     gain.gain.setValueAtTime(0.1, now + i * 0.1);
+                     gain.gain.linearRampToValueAtTime(0, now + i * 0.1 + 0.4);
+                     
+                     osc.connect(gain);
+                     gain.connect(this.ctx.destination);
+                     osc.start(now + i * 0.1);
+                     osc.stop(now + i * 0.1 + 0.4);
+                });
+                
+                // 最後加一個低音轟鳴增加震撼感
+                this.playTone(130.81, 1.0, 'sawtooth', 0.15); // C3
+            }
+        };
+
+        // --- 初始化資料 ---
+        const defaultCandidates = [
+            "陳主任", "李醫師", "王物理師", "張放射師", "林護理長", 
+            "吳書記", "劉醫師", "黃住院醫師", "趙研究員", "孫工程師",
+            "周專科護理師", "鄭個管師", "謝技術長", "馬物理師", "蔡放射師"
+        ];
+        const STORAGE_KEY = 'rad_onc_lottery_v1';
+
+        let state = {
+            candidates: [...defaultCandidates],
+            winners: [],
+            isScanning: false,
+            showResult: false
+        };
+
+        let scanInterval = null;
+        let soundInterval = null;
+        let gantryInterval = null;
+
+        // --- DOM Elements ---
+        const els = {
+            displayName: document.getElementById('display-name'),
+            lockedMsg: document.getElementById('locked-msg'),
+            congratsTag: document.getElementById('congrats-tag'),
+            countRemaining: document.getElementById('count-remaining'),
+            countTotal: document.getElementById('count-total'),
+            btnBeam: document.getElementById('btn-beam'),
+            btnNext: document.getElementById('btn-next'),
+            btnIconBeam: document.getElementById('btn-icon-beam'),
+            btnTextBeam: document.getElementById('btn-text-beam'),
+            winnersList: document.getElementById('winners-list'),
+            candidatesPreview: document.getElementById('candidates-preview'),
+            settingsModal: document.getElementById('settings-modal'),
+            settingsInput: document.getElementById('settings-input'),
+            settingsCount: document.getElementById('settings-count'),
+            statusText: document.getElementById('status-text'),
+            headerIcon: document.getElementById('header-icon'),
+            headerGlow: document.getElementById('header-glow'),
+            scanOverlay: document.getElementById('scan-overlay'),
+            scanCircle: document.getElementById('scan-circle'),
+            targetStatus: document.getElementById('target-status'),
+            doseRate: document.getElementById('dose-rate'),
+            gantryAngle: document.getElementById('gantry-angle'),
+            resetModal: document.getElementById('reset-modal'),
+            toastContainer: document.getElementById('toast-container')
+        };
+
+        // --- 本地儲存邏輯 (LocalStorage) ---
+        function loadState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed.candidates) && Array.isArray(parsed.winners)) {
+                        state.candidates = parsed.candidates;
+                        state.winners = parsed.winners;
+                        console.log("已從本地儲存載入進度");
+                    }
+                }
+            } catch (e) {
+                console.error("載入儲存檔失敗", e);
+            }
+        }
+
+        function saveState() {
+            try {
+                const dataToSave = {
+                    candidates: state.candidates,
+                    winners: state.winners
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+            } catch (e) {
+                console.error("儲存失敗", e);
+            }
+        }
+
+        // --- 初始化 ---
+        function init() {
+            try {
+                loadState(); 
+                updateUI();
+                if(els.settingsInput) {
+                    els.settingsInput.value = state.candidates.join('\n');
+                    els.settingsInput.addEventListener('input', updateSettingsCount);
+                }
+                updateSettingsCount();
+                if(window.lucide) {
+                    lucide.createIcons();
+                }
+                
+                // 初始化音效 (使用者第一次點擊頁面時會被觸發，這裡先不強制)
+                document.body.addEventListener('click', () => AudioCtrl.init(), { once: true });
+            } catch(e) {
+                console.error("Init error:", e);
+            }
+        }
+
+        function toggleSound() {
+            AudioCtrl.init(); // 確保有點擊時啟動 Context
+            const isEnabled = AudioCtrl.toggle();
+            showToast(isEnabled ? "音效已開啟" : "音效已靜音");
+        }
+
+        function updateSettingsCount() {
+            if(!els.settingsInput) return;
+            const count = els.settingsInput.value.split('\n').filter(n => n.trim() !== '').length;
+            els.settingsCount.innerText = count;
+        }
+
+        // --- 核心邏輯 ---
+        function startTreatment() {
+            if (state.candidates.length === 0) return;
+            
+            // 確保音效引擎啟動
+            AudioCtrl.init();
+
+            state.isScanning = true;
+            state.showResult = false;
+            updateUI();
+
+            els.doseRate.innerText = "600";
+            
+            let counter = 0;
+            // 畫面跳動
+            scanInterval = setInterval(() => {
+                const randomIndex = Math.floor(Math.random() * state.candidates.length);
+                els.displayName.innerText = state.candidates[randomIndex];
+                counter++;
+            }, 50);
+
+            // 聲音跳動 (不需要跟畫面一樣快，每 100ms 響一次比較不吵)
+            soundInterval = setInterval(() => {
+                AudioCtrl.playScan();
+            }, 120);
+
+            gantryInterval = setInterval(() => {
+                els.gantryAngle.innerText = (Math.random() * 360).toFixed(1);
+            }, 100);
+
+            setTimeout(stopTreatment, 3000);
+        }
+
+        function stopTreatment() {
+            clearInterval(scanInterval);
+            clearInterval(soundInterval);
+            clearInterval(gantryInterval);
+            
+            const finalIndex = Math.floor(Math.random() * state.candidates.length);
+            const winnerName = state.candidates[finalIndex];
+
+            state.candidates.splice(finalIndex, 1);
+            state.winners.unshift({ name: winnerName, round: state.winners.length + 1 });
+            
+            saveState();
+
+            state.isScanning = false;
+            state.showResult = true;
+
+            // 播放中獎音效
+            AudioCtrl.playWin();
+
+            els.displayName.innerText = winnerName;
+            els.doseRate.innerText = "0";
+            updateUI();
+        }
+
+        function nextFraction() {
+            state.showResult = false;
+            els.displayName.innerText = "等待下個目標";
+            updateUI();
+        }
+
+        // --- UI 更新邏輯 ---
+        function updateUI() {
+            els.countRemaining.innerText = state.candidates.length;
+            els.countTotal.innerText = state.candidates.length + state.winners.length;
+
+            if (state.showResult) {
+                els.btnBeam.classList.add('hidden');
+                els.btnNext.classList.remove('hidden');
+            } else {
+                els.btnBeam.classList.remove('hidden');
+                els.btnNext.classList.add('hidden');
+                
+                if (state.isScanning) {
+                    els.btnBeam.disabled = true;
+                    els.btnTextBeam.innerText = "IRRADIATING...";
+                    els.btnIconBeam.classList.add('animate-spin');
+                } else {
+                    els.btnBeam.disabled = state.candidates.length === 0;
+                    els.btnTextBeam.innerText = state.candidates.length === 0 ? "EMPTY" : "BEAM ON";
+                    els.btnIconBeam.classList.remove('animate-spin');
+                }
+            }
+
+            if (state.isScanning) {
+                els.statusText.innerText = "BEAM ON";
+                els.statusText.classList.add('text-yellow-400', 'animate-pulse');
+                els.statusText.classList.remove('text-green-400');
+                els.headerIcon.classList.add('text-yellow-400', 'animate-spin');
+                els.headerIcon.classList.remove('text-green-500');
+                els.headerGlow.classList.remove('opacity-0');
+                els.headerGlow.classList.add('animate-pulse');
+                
+                els.scanOverlay.classList.remove('opacity-20');
+                els.scanOverlay.classList.add('opacity-100');
+                els.scanCircle.classList.add('animate-ping');
+                els.targetStatus.innerText = "LOCKING...";
+            } else {
+                els.statusText.innerText = "READY";
+                els.statusText.classList.remove('text-yellow-400', 'animate-pulse');
+                els.statusText.classList.add('text-green-400');
+                els.headerIcon.classList.remove('text-yellow-400', 'animate-spin');
+                els.headerIcon.classList.add('text-green-500');
+                els.headerGlow.classList.add('opacity-0');
+                els.headerGlow.classList.remove('animate-pulse');
+                
+                els.scanOverlay.classList.add('opacity-20');
+                els.scanOverlay.classList.remove('opacity-100');
+                els.scanCircle.classList.remove('animate-ping');
+                els.targetStatus.innerText = state.showResult ? "LOCKED" : "SEARCHING...";
+            }
+
+            if (state.showResult) {
+                els.displayName.classList.add('winner-effect');
+                els.displayName.classList.remove('text-green-500');
+                els.lockedMsg.classList.remove('hidden');
+                els.congratsTag.classList.remove('hidden');
+            } else {
+                els.displayName.classList.remove('winner-effect');
+                els.displayName.classList.add('text-green-500');
+                els.lockedMsg.classList.add('hidden');
+                els.congratsTag.classList.add('hidden');
+            }
+
+            renderLists();
+        }
+
+        function renderLists() {
+            if (state.winners.length === 0) {
+                els.winnersList.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm italic">No treatment history.</div>';
+            } else {
+                els.winnersList.innerHTML = state.winners.map(w => `
+                    <div class="flex items-center justify-between bg-green-900/30 p-2 rounded border-l-4 border-yellow-500 mb-2 animate-pulse-fast" style="animation-iteration-count: 1;">
+                        <span class="text-white font-bold">${w.name}</span>
+                        <span class="text-xs text-green-400 font-mono">#${w.round}</span>
+                    </div>
+                `).join('');
+            }
+            els.candidatesPreview.innerText = state.candidates.join(', ');
+        }
+
+        // --- Modal & Toast Utils ---
+        function showToast(message, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `px-6 py-3 rounded shadow-lg text-white font-bold mb-2 flex items-center gap-2 animate-toast ${isError ? 'bg-red-600 border border-red-400' : 'bg-green-600 border border-green-400'}`;
+            toast.innerHTML = isError 
+                ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> ${message}`
+                : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> ${message}`;
+            
+            els.toastContainer.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 3000);
+        }
+
+        // --- 設定視窗邏輯 ---
+        function openSettings() {
+            els.settingsInput.value = state.candidates.join('\n');
+            updateSettingsCount();
+            els.settingsModal.classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            els.settingsModal.classList.add('hidden');
+        }
+
+        function saveSettings() {
+            const newNames = els.settingsInput.value.split('\n').map(n => n.trim()).filter(n => n !== '');
+            if (newNames.length === 0) {
+                showToast("名單不能為空！", true);
+                return;
+            }
+            state.candidates = newNames;
+            state.showResult = false;
+            els.displayName.innerText = "系統就緒";
+            
+            saveState();
+            closeSettings();
+            updateUI();
+            showToast("名單已更新");
+        }
+
+        // --- 重置邏輯 ---
+        function openResetModal() {
+            els.resetModal.classList.remove('hidden');
+        }
+
+        function closeResetModal() {
+            els.resetModal.classList.add('hidden');
+        }
+
+        function confirmFullReset() {
+            const winnerNames = state.winners.map(w => w.name).reverse();
+            state.candidates = [...state.candidates, ...winnerNames];
+            state.winners = [];
+            state.showResult = false;
+            els.displayName.innerText = "系統就緒";
+            
+            els.settingsInput.value = state.candidates.join('\n');
+            
+            saveState();
+            closeResetModal();
+            closeSettings();
+            updateUI();
+            showToast("系統已重置，名單已還原");
+        }
+
+        // 使用 DOMContentLoaded 確保元素載入完成
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
